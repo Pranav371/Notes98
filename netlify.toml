@@ -5,6 +5,7 @@
 [build.environment]
   NODE_VERSION = "18.14.0"
   NPM_FLAGS = "--legacy-peer-deps"
+  CI = "false"
   
 [build.processing]
   skip_processing = false
