@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { motion } from 'framer-motion';
-import { FiX, FiSave, FiChevronDown, FiEye, FiEdit, FiTag, FiPlus } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiX, FiSave, FiChevronDown, FiEye, FiEdit, FiTag, FiPlus, FiBold, FiItalic, FiList, FiLink, FiImage, FiTable } from 'react-icons/fi';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { useNotes } from '../../context/NotesContext';
@@ -319,6 +319,131 @@ const SaveButton = styled(motion.button)`
   }
 `;
 
+const FormattingToolbar = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--surface);
+`;
+
+const FormatButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--primary-color);
+  }
+  
+  svg {
+    font-size: 1.1rem;
+  }
+`;
+
+const ToolbarDivider = styled.div`
+  width: 1px;
+  background-color: var(--border);
+  margin: 0 0.25rem;
+`;
+
+const ModalOverlay = styled(motion.div)`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled(motion.div)`
+  background-color: var(--surface);
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+`;
+
+const ModalHeader = styled.h3`
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+`;
+
+const TableConfigForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const Label = styled.label`
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+`;
+
+const Input = styled.input`
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+`;
+
+const Button = styled.button`
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  
+  &.primary {
+    background-color: var(--primary-color);
+    color: white;
+    
+    &:hover {
+      background-color: var(--primary-color-dark);
+    }
+  }
+  
+  &.secondary {
+    background-color: transparent;
+    color: var(--text-secondary);
+    
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+  }
+`;
+
 const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -328,6 +453,9 @@ const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
   const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
   const [viewMode, setViewMode] = useState('edit'); // 'edit', 'preview', 'split'
   const [previewHtml, setPreviewHtml] = useState('');
+  const [editorRef, setEditorRef] = useState(null);
+  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [tableConfig, setTableConfig] = useState({ rows: 3, columns: 3 });
   
   const { subjects } = useNotes();
   
@@ -388,7 +516,50 @@ const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
     setSelectedSubject(subject);
     setIsSubjectDropdownOpen(false);
   };
-  
+
+  const insertMarkdown = (prefix, suffix = '') => {
+    if (!editorRef) return;
+    
+    const start = editorRef.selectionStart;
+    const end = editorRef.selectionEnd;
+    const text = editorRef.value;
+    const selectedText = text.substring(start, end);
+    
+    const newText = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end);
+    editorRef.value = newText;
+    
+    // Update the content state
+    setContent(newText);
+    
+    // Set cursor position after the inserted text
+    const newCursorPos = start + prefix.length + selectedText.length + suffix.length;
+    editorRef.setSelectionRange(newCursorPos, newCursorPos);
+    editorRef.focus();
+  };
+
+  const generateTableMarkdown = (rows, columns) => {
+    let table = '\n';
+    
+    // Generate header row
+    table += '| ' + Array(columns).fill('Header').map((h, i) => `${h} ${i + 1}`).join(' | ') + ' |\n';
+    
+    // Generate separator row
+    table += '| ' + Array(columns).fill('---').join(' | ') + ' |\n';
+    
+    // Generate data rows
+    for (let i = 0; i < rows; i++) {
+      table += '| ' + Array(columns).fill('Cell').map((c, j) => `${c} ${i + 1}-${j + 1}`).join(' | ') + ' |\n';
+    }
+    
+    return table;
+  };
+
+  const handleTableInsert = () => {
+    const tableMarkdown = generateTableMarkdown(tableConfig.rows, tableConfig.columns);
+    insertMarkdown(tableMarkdown);
+    setIsTableModalOpen(false);
+  };
+
   return (
     <EditorContainer>
       <EditorHeader>
@@ -435,6 +606,33 @@ const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
         onChange={(e) => setTitle(e.target.value)}
       />
       
+      <FormattingToolbar>
+        <FormatButton onClick={() => insertMarkdown('**', '**')} title="Bold">
+          <FiBold />
+        </FormatButton>
+        <FormatButton onClick={() => insertMarkdown('*', '*')} title="Italic">
+          <FiItalic />
+        </FormatButton>
+        <ToolbarDivider />
+        <FormatButton onClick={() => insertMarkdown('- ')} title="Bullet List">
+          <FiList />
+        </FormatButton>
+        <FormatButton onClick={() => insertMarkdown('1. ')} title="Numbered List">
+          <FiList />
+        </FormatButton>
+        <ToolbarDivider />
+        <FormatButton onClick={() => insertMarkdown('[', '](url)')} title="Link">
+          <FiLink />
+        </FormatButton>
+        <FormatButton onClick={() => insertMarkdown('![', '](image-url)')} title="Image">
+          <FiImage />
+        </FormatButton>
+        <ToolbarDivider />
+        <FormatButton onClick={() => setIsTableModalOpen(true)} title="Insert Table">
+          <FiTable />
+        </FormatButton>
+      </FormattingToolbar>
+      
       <EditorControls>
         <ControlButton 
           active={viewMode === 'edit'}
@@ -462,9 +660,10 @@ const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
       
       <EditorContent>
         <Editor 
+          ref={setEditorRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Write your note content here (supports Markdown)..."
+          placeholder="Start writing your note..."
           view={viewMode}
         />
         
@@ -503,6 +702,62 @@ const NoteEditor = ({ initialNote, subjectId, onSave, onCancel }) => {
           <span>Save Note</span>
         </SaveButton>
       </Footer>
+      
+      <AnimatePresence>
+        {isTableModalOpen && (
+          <ModalOverlay
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsTableModalOpen(false)}
+          >
+            <ModalContent
+              onClick={e => e.stopPropagation()}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+            >
+              <ModalHeader>Insert Table</ModalHeader>
+              <TableConfigForm>
+                <FormGroup>
+                  <Label>Number of Rows</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={tableConfig.rows}
+                    onChange={(e) => setTableConfig(prev => ({ ...prev, rows: Math.max(1, Math.min(20, parseInt(e.target.value) || 1)) }))}
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Number of Columns</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={tableConfig.columns}
+                    onChange={(e) => setTableConfig(prev => ({ ...prev, columns: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) }))}
+                  />
+                </FormGroup>
+                <ButtonGroup>
+                  <Button 
+                    className="secondary"
+                    onClick={() => setIsTableModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    className="primary"
+                    onClick={handleTableInsert}
+                  >
+                    Insert Table
+                  </Button>
+                </ButtonGroup>
+              </TableConfigForm>
+            </ModalContent>
+          </ModalOverlay>
+        )}
+      </AnimatePresence>
     </EditorContainer>
   );
 };
